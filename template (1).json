@@ -1,0 +1,171 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "GauthamRGType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ]
+        },
+        "GauthamtestName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "GauthamtestAdminUserName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "GauthamtestAdminPassword": {
+            "type": "securestring"
+        },
+        "GauthamtestWindowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2012-R2-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "Windows-Server-Technical-Preview"
+            ]
+        }
+    },
+    "resources": [
+        {
+            "name": "[variables('GauthamRGName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "GauthamRG"
+            },
+            "properties": {
+                "accountType": "[parameters('GauthamRGType')]"
+            }
+        },
+        {
+            "name": "Gauthamvnet",
+            "type": "Microsoft.Network/virtualNetworks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "Gauthamvnet"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('GauthamvnetPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('GauthamvnetSubnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('GauthamvnetSubnet1Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('GauthamvnetSubnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('GauthamvnetSubnet2Prefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('GauthamtestNicName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', 'Gauthamvnet')]"
+            ],
+            "tags": {
+                "displayName": "GauthamtestNic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('GauthamtestSubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('GauthamtestName')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('GauthamRGName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('GauthamtestNicName'))]"
+            ],
+            "tags": {
+                "displayName": "Gauthamtest"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('GauthamtestVmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('GauthamtestName')]",
+                    "adminUsername": "[parameters('GauthamtestAdminUsername')]",
+                    "adminPassword": "[parameters('GauthamtestAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('GauthamtestImagePublisher')]",
+                        "offer": "[variables('GauthamtestImageOffer')]",
+                        "sku": "[parameters('GauthamtestWindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "GauthamtestOSDisk",
+                        "vhd": {
+                            "uri": "[concat('http://', variables('GauthamRGName'), '.blob.core.windows.net/', variables('GauthamtestStorageAccountContainerName'), '/', variables('GauthamtestOSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('GauthamtestNicName'))]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "variables": {
+        "GauthamRGName": "[concat('GauthamRG', uniqueString(resourceGroup().id))]",
+        "GauthamvnetPrefix": "10.0.0.0/16",
+        "GauthamvnetSubnet1Name": "Subnet-1",
+        "GauthamvnetSubnet1Prefix": "10.0.0.0/24",
+        "GauthamvnetSubnet2Name": "Subnet-2",
+        "GauthamvnetSubnet2Prefix": "10.0.1.0/24",
+        "GauthamtestImagePublisher": "MicrosoftWindowsServer",
+        "GauthamtestImageOffer": "WindowsServer",
+        "GauthamtestOSDiskName": "GauthamtestOSDisk",
+        "GauthamtestVmSize": "Standard_D1",
+        "GauthamtestVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'Gauthamvnet')]",
+        "GauthamtestSubnetRef": "[concat(variables('GauthamtestVnetID'), '/subnets/', variables('GauthamvnetSubnet1Name'))]",
+        "GauthamtestStorageAccountContainerName": "vhds",
+        "GauthamtestNicName": "[concat(parameters('GauthamtestName'), 'NetworkInterface')]"
+    }
+}
